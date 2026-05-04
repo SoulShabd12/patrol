@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Checkpoint Scan</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080c10;
+      --card: #0d1117;
+      --border: #1c2a3a;
+      --text: #c9d1d9;
+      --muted: #4a5568;
+      --accent: #00b4d8;
+      --success: #39d353;
+      --error: #f85149;
+      --warning: #e3b341;
+      --mono: 'Share Tech Mono', monospace;
+      --sans: 'Barlow', sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 180, 216, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 180, 216, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 28px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 0 60px rgba(0, 180, 216, 0.05), 0 20px 40px rgba(0,0,0,0.5);
+    }
+
+    /* Top accent line */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 20%; right: 20%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      border-radius: 0 0 4px 4px;
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+
+    /* Spinner */
+    .spinner-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Icon states */
+    .state-icon {
+      font-size: 56px;
+      margin-bottom: 20px;
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: 0.3px;
+    }
+    p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .status-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 5px 12px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+    .label-scanning { background: rgba(0,180,216,0.1); color: var(--accent); border: 1px solid rgba(0,180,216,0.2); }
+    .label-success  { background: rgba(57,211,83,0.1);  color: var(--success); border: 1px solid rgba(57,211,83,0.2); }
+    .label-error    { background: rgba(248,81,73,0.1);  color: var(--error);   border: 1px solid rgba(248,81,73,0.2); }
+    .label-warning  { background: rgba(227,179,65,0.1); color: var(--warning); border: 1px solid rgba(227,179,65,0.2); }
+
+    .countdown {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 20px;
+    }
+
+    .detail-row {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 16px;
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="logo">Security Patrol</div>
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+    <div class="status-label label-scanning">SCANNING</div>
+    <h2>Initialising...</h2>
+    <p>Requesting location access.<br>Please wait.</p>
+  </div>
+
+  <script>
+    // ================================================================
+    //  ONLY THING YOU NEED TO CHANGE:
+    //  Paste your deployed Google Apps Script URL below
+    // ================================================================
+    const APPS_SCRIPT_URL = https://script.google.com/macros/s/AKfycbwGVgGAMNWRhPkJWSM9e3LE8dZEnKeLy4Fti6e-KRLrSGM0Dtweflct5HczwE5PYt8a/exec;
+    // ================================================================
+
+    const params = new URLSearchParams(window.location.search);
+    const checkpointId = params.get('id');
+
+    // If page was already used (expired param), show dead state immediately
+    if (params.get('expired') === '1') {
+      showExpired();
+    } else if (!checkpointId) {
+      showState('error', '❌', 'INVALID', 'Invalid QR Code', 'This QR code is not linked to any checkpoint. Please contact your supervisor.');
+    } else {
+      startScan();
+    }
+
+    // ── STEP 1: Get GPS ──────────────────────────────────────────────
+    function startScan() {
+      updateCard('Acquiring GPS...', 'Requesting your location.<br>Please allow when prompted.');
+
+      if (!navigator.geolocation) {
+        showState('error', '📵', 'ERROR', 'GPS Unavailable', 'Your device does not support location services.');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => sendScan(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+        err => {
+          const msgs = {
+            1: 'Location permission denied. Please enable location in your browser settings and scan again.',
+            2: 'Unable to determine location. Ensure GPS is enabled.',
+            3: 'Location request timed out. Move to an open area and try again.'
+          };
+          showState('error', '📍', 'ERROR', 'Location Failed', msgs[err.code] || 'Unknown location error.');
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    // ── STEP 2: Send to Apps Script ──────────────────────────────────
+    async function sendScan(lat, lng, accuracy) {
+      updateCard('Verifying...', 'Checking with server.<br>Do not close this page.');
+
+      // Append all data as URL params — most reliable method for Apps Script
+      const url = `${APPS_SCRIPT_URL}?checkpointId=${encodeURIComponent(checkpointId)}&lat=${lat}&lng=${lng}&accuracy=${Math.round(accuracy)}&ts=${Date.now()}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.success) {
+          showState('success', '✅', 'SUCCESS', 'Checkpoint Confirmed', data.message, lat, lng, accuracy);
+          startCountdown();
+        } else {
+          showState('error', '❌', 'REJECTED', 'Scan Rejected', data.message);
+        }
+      } catch (err) {
+        showState('error', '🌐', 'ERROR', 'Network Error', 'Could not reach server. Check mobile data and try again.');
+      }
+    }
+
+    // ── STEP 3: Auto-destroy after success ───────────────────────────
+    function startCountdown() {
+      let secs = 5;
+      const el = document.getElementById('countdown');
+      if (!el) return;
+
+      const timer = setInterval(() => {
+        secs--;
+        el.textContent = `Page expires in ${secs}s...`;
+        if (secs <= 0) {
+          clearInterval(timer);
+          showExpired();
+          // Overwrite URL in browser history so back button leads to expired page
+          history.replaceState(null, '', window.location.pathname + '?id=' + checkpointId + '&expired=1');
+        }
+      }, 1000);
+    }
+
+    // ── UI HELPERS ───────────────────────────────────────────────────
+    function updateCard(title, subtitle) {
+      document.getElementById('card').innerHTML = `
+        <div class="logo">Security Patrol</div>
+        <div class="spinner-wrap"><div class="spinner"></div></div>
+        <div class="status-label label-scanning">SCANNING</div>
+        <h2>${title}</h2>
+        <p>${subtitle}</p>
+      `;
+    }
+
+    function showState(type, icon, labelText, title, msg, lat, lng, acc) {
+      const labelClass = type === 'success' ? 'label-success' : type === 'error' ? 'label-error' : 'label-warning';
+      const detail = lat ? `<div class="detail-row">GPS ${lat.toFixed(5)}, ${lng.toFixed(5)} | ±${Math.round(acc)}m</div>` : '';
+      const countdown = type === 'success' ? '<div class="countdown" id="countdown">Page expires in 5s...</div>' : '';
+
+      document.getElementById('card').innerHTML = `
+        <div class="logo">Security Patrol</div>
+        <div class="state-icon">${icon}</div>
+        <div class="status-label ${labelClass}">${labelText}</div>
+        <h2>${title}</h2>
+        <p>${msg}</p>
+        ${detail}
+        ${countdown}
+      `;
+    }
+
+    function showExpired() {
+      document.getElementById('card').innerHTML = `
+        <div class="logo">Security Patrol</div>
+        <div class="state-icon">🔒</div>
+        <div class="status-label label-warning">EXPIRED</div>
+        <h2>Page Expired</h2>
+        <p>This scan has already been completed.<br>Scan the QR code again to start a new scan.</p>
+      `;
+    }
+  </script>
+</body>
+</html>
